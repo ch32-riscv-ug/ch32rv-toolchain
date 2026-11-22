@@ -123,6 +123,16 @@ cmake "${cmake_args[@]}"
 # 3. Build and install only the distribution, stripped.
 rm -rf "$STAGE"
 ninja -C "$BUILD" ${JOBS:+-j "$JOBS"} install-distribution-stripped
+# Windows: each name is a full copy of its tool, and the components install
+# names a bare-metal RISC-V build never calls - clang-cl and clang-cpp (80 MB
+# each, the MSVC driver and `clang -E`) and lld's other drivers (49 MB each:
+# lld, lld-link, ld64.lld, wasm-ld). 23.1.5-3 unpacked to 706 MB, 254 MB of
+# the 267 MB zip in bin/. clang finds ld.lld by that name (CLANG_DEFAULT_LINKER).
+if [ "$WINDOWS" = 1 ]; then
+  for t in clang-cl clang-cpp lld lld-link ld64.lld wasm-ld; do
+    rm -f "$STAGE/bin/$t.exe"
+  done
+fi
 
 # 4. Licenses and a version note in the archive.
 cp "$SRC/llvm/LICENSE.TXT" "$STAGE/LICENSE.TXT"
