@@ -1,0 +1,28 @@
+lld: --enable-non-contiguous-regions crashed now and then (about one link in
+64) in OutputSection::finalizeInputSections(): the merge synthetic section
+took its potential spill list with try_emplace(syn, it->second), and when
+that insertion grew potentialSpillLists' DenseMap, it->second pointed into
+the freed buckets. Copy the list before inserting.
+
+Upstream: https://github.com/llvm/llvm-project/issues/245888 (drop this
+patch once a release has the fix).
+
+--- a/lld/ELF/OutputSections.cpp	2026-11-25 17:34:51.646205287 +0900
++++ b/lld/ELF/OutputSections.cpp	2026-11-25 19:01:17.966527396 +0900
+@@ -244,10 +244,13 @@
+         syn->entsize = ms->entsize;
+         isd->sections.push_back(syn);
+         // The merge synthetic section inherits the potential spill locations of
+-        // its first contained section.
++        // its first contained section. Copy the list first: try_emplace may
++        // grow the map and free the bucket that it->second refers to.
+         auto it = script->potentialSpillLists.find(ms);
+-        if (it != script->potentialSpillLists.end())
+-          script->potentialSpillLists.try_emplace(syn, it->second);
++        if (it != script->potentialSpillLists.end()) {
++          LinkerScript::PotentialSpillList list = it->second;
++          script->potentialSpillLists.try_emplace(syn, list);
++        }
+       }
+       (*i)->addSection(ms);
+     }
